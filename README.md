@@ -75,3 +75,106 @@ void init_xinput()
   }
 }
 ```
+
+## Measuring elapsed Time in Seconds
+There are two functions in Win32 API to measure elapsed time.
+These are mainly used for animations or advancing the game state, since they represent the time in the real world, therfore the perceived time of the user.
+
+QueryPerformanceFrequency is used to get the number of 'ticks' wich represents one second. Once your program runs, this number is allways the same, so you don't need to query it multiple times.
+
+QueryPerformanceCounter is used to get the time represented in 'ticks'.
+
+'ticks' are an abstract counter wich is the internal unit Windows uses to measure time. Typically hardware clocks are used to determin elapsed time.
+Since there could be different hardware wich runs at different known frequencies, the counter might grow slower or faster depending on the frequency. Thats why whe have to dynamically ask for what one second is in 'ticks'.
+
+In order to measure elapsed seconds of a piece of code, you need to store the time in ticks before and after the code is executed.
+Then you subtract the beginning time from the end time and devide be the ticks-per-second retreived by QueryPerformanceFrequency.
+The following are exaples of how you can use this.
+
+```c++
+#include <stdint.h> // I personally use my own type names like u64 instead of uint64_t :D
+
+void init_ticks_per_second(uint64_t *ticks_per_second)
+{
+    LARGE_INTEGER win32_ticks_per_second;
+    QueryPerformanceFrequency(&win32_ticks_per_second);
+    *ticks_per_second = win32_ticks_per_second.QuadPart;
+}
+
+void foo()
+{
+    uint64_t ticks_per_second;
+    
+    init_ticks_per_second(&ticks_per_second);
+    
+    LARGE_INTEGER last_time_ticks;
+    QueryPerformanceCounter(&last_time_ticks);
+    
+    while (true)
+    {
+        // do something ...
+        
+        LARGE_INTEGER time_ticks;
+        QueryPerformanceCounter(&time_ticks);
+        
+        // using float, since we are interested in frations of a second
+        float delta_seconds = (time_ticks.QuadPart - last_time_ticks.QuadPart) / (float)ticks_per_second;
+        
+        // update last_time_ticks,
+        // otherwise you measure the time from the beginning of the loop, to the current iteration.
+        // this way you measure the time between 2 loop iterations
+        last_time_ticks = time_ticks;
+    }
+}
+
+float get_elapsed_seconds(uint64_t *timer_ticks, uint64_t ticks_per_second)
+{
+    LARGE_INTEGER time_ticks;
+    QueryPerformanceCounter(&time_ticks);
+
+    // using float, since we are interested in frations of a second
+    float delta_seconds = (time_ticks.QuadPart - *timer_ticks) / (float)ticks_per_second;
+
+    // update last_time_ticks,
+    // otherwise you measure the time from the beginning of the loop, to the current iteration.
+    // this way you measure the time between 2 loop iterations
+    *timer_ticks = time_ticks.QuadPart;
+    
+    return delta_seconds;
+}
+
+void foo2()
+{
+    uint64_t ticks_per_second;
+    
+    init_ticks_per_second(&ticks_per_second);
+       
+    uint64_t timer_ticks;
+    // can be used to init timer, just ignore the return value
+    get_elapsed_seconds(&timer_ticks, ticks_per_second);
+    
+    while (true)
+    {
+        // do something ...
+        
+       float delta_seconds = get_elapsed_seconds(&timer_ticks, ticks_per_second);
+    }
+}
+
+uint64_t get_elapsed_micro_seconds(uint64_t *timer_ticks, uint64_t ticks_per_second)
+{
+    LARGE_INTEGER time_ticks;
+    QueryPerformanceCounter(&time_ticks);
+
+    // multiply difference by 1000 (1 second = 1000 milliseconds),
+    // before deviding by ticks_per_second
+    uint64_t delta_micro_seconds = (time_ticks.QuadPart - *timer_ticks) * 1000 / ticks_per_second;
+
+    // update last_time_ticks,
+    // otherwise you measure the time from the beginning of the loop, to the current iteration.
+    // this way you measure the time between 2 loop iterations
+    *timer_ticks = time_ticks.QuadPart;
+    
+    return delta_micro_seconds;
+}
+```
